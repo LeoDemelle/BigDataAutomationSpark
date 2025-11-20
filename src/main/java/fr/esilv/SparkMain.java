@@ -1,6 +1,7 @@
 package fr.esilv;
 
 import org.apache.spark.sql.SparkSession;
+import fr.esilv.job.DailyIntegrationJob;
 
 public class SparkMain {
 
@@ -23,10 +24,16 @@ public class SparkMain {
         try {
             switch (job) {
                 case "daily-integration":
-                    // TODO: appeler la classe qui gérera l'intégration quotidienne
-                    System.out.println("Running job: daily-integration");
-                    // ex: DailyIntegrationJob.run(spark, args);
+                    if (args.length < 3) {
+                        System.err.println("Usage: SparkMain daily-integration <day> <csvFile>");
+                        System.exit(1);
+                    }
+                    String day = args[1];
+                    String csvFile = args[2];
+                    System.out.println("Running job: daily-integration, day = " + day + ", csvFile = " + csvFile);
+                    DailyIntegrationJob.run(spark, day, csvFile);
                     break;
+
 
                 case "report":
                     // TODO: job de reporting
