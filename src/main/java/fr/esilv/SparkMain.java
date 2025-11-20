@@ -21,6 +21,8 @@ public class SparkMain {
                 .master("local[*]")
                 .getOrCreate();
 
+        spark.sparkContext().setLogLevel("ERROR");
+
         try {
             switch (job) {
                 case "daily-integration":
