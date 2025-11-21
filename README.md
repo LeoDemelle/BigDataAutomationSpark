@@ -8,9 +8,9 @@
 
 ✅ Finaliser pom.xml (Spark + shade plugin).
 
-❌ Créer SparkMain + la structure de packages.
+✅ Créer SparkMain + la structure de packages.
 
-❌ Implémenter DailyIntegrationJob (lecture CSV → diff → bal_diff + bal_latest).
+✅ Implémenter DailyIntegrationJob (lecture CSV → diff → bal_diff + bal_latest).
 
 ❌ Implémenter ReportJob (aggrégats par département).
 
