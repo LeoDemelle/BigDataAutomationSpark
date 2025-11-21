@@ -7,8 +7,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.List;
 
 import static org.apache.spark.sql.functions.*;
+
 
 /**
  * DailyIntegrationJob
@@ -131,18 +133,20 @@ public class DailyIntegrationJob {
      * Calcul des diff :
      *  - Inserted (I) = current LEFT ANTI JOIN prev sur ID_COLUMN
      *  - Deleted  (D) = prev    LEFT ANTI JOIN current sur ID_COLUMN
-     *  - Updated  (U) = TODO plus tard (pour l'instant, on les ignore)
+     *  - Updated  (U) = lignes présentes dans les deux snapshots, mais dont au moins
+     *                   une colonne non-ID a changé.
      *
-     * On ajoute une colonne 'op' ("I" ou "D") + une colonne 'day'.
+     * On ajoute une colonne 'op' ("I", "U" ou "D") + une colonne 'day'.
      */
     private static Dataset<Row> computeSimpleDiff(SparkSession spark,
                                                   Dataset<Row> prev,
                                                   Dataset<Row> current,
                                                   String day) {
-        System.out.println("[DailyIntegrationJob] Computing diff (I/D only, no U yet).");
+        System.out.println("[DailyIntegrationJob] Computing diff (I/U/D).");
 
-        // On vérifie que la colonne ID existe bien dans les deux DataFrames
-        if (!Arrays.asList(prev.columns()).contains(ID_COLUMN) || !Arrays.asList(current.columns()).contains(ID_COLUMN)) {
+        // Vérifier que la colonne ID existe bien dans les deux DataFrames
+        if (!Arrays.asList(prev.columns()).contains(ID_COLUMN)
+                || !Arrays.asList(current.columns()).contains(ID_COLUMN)) {
             System.out.println("[DailyIntegrationJob][WARN] ID column '" + ID_COLUMN + "' is missing in one of the datasets.");
             System.out.println("[DailyIntegrationJob][WARN] Returning an EMPTY diff for now.");
             return spark.emptyDataFrame()
@@ -150,7 +154,7 @@ public class DailyIntegrationJob {
                     .withColumn("day", lit(day)); // structure minimale
         }
 
-        // Insertions : dans current mais pas dans prev
+        // === INSERTS : dans current mais pas dans prev ======================
         Dataset<Row> inserted = current.join(
                         prev.select(col(ID_COLUMN).alias(ID_COLUMN)),
                         ID_COLUMN,
@@ -161,7 +165,7 @@ public class DailyIntegrationJob {
         System.out.println("[DailyIntegrationJob] Sample inserted rows:");
         inserted.show(5, false);
 
-        // Deletions : dans prev mais pas dans current
+        // === DELETES : dans prev mais pas dans current =====================
         Dataset<Row> deleted = prev.join(
                         current.select(col(ID_COLUMN).alias(ID_COLUMN)),
                         ID_COLUMN,
@@ -172,18 +176,57 @@ public class DailyIntegrationJob {
         System.out.println("[DailyIntegrationJob] Sample deleted rows:");
         deleted.show(5, false);
 
-        // TODO plus tard : Updated (U) -> comparaison des colonnes non-ID
+        // === UPDATES : présents dans les deux, mais au moins une colonne (hors ID) a changé ===
 
-        // Union des deux (en permettant des colonnes manquantes si jamais les schémas diffèrent)
-        Dataset<Row> diff = inserted.unionByName(deleted, true)
+        // On travaille avec des alias pour distinguer les colonnes prev/curr
+        Dataset<Row> joined = prev.alias("prev").join(
+                current.alias("curr"),
+                col("prev." + ID_COLUMN).equalTo(col("curr." + ID_COLUMN)),
+                "inner"
+        );
+
+        // Liste des colonnes non-ID à comparer
+        List<String> allColumns = Arrays.asList(current.columns());
+        List<String> nonIdColumns = allColumns.stream()
+                .filter(c -> !c.equals(ID_COLUMN))
+                .toList();
+
+        System.out.println("[DailyIntegrationJob] Non-ID columns to compare for updates: " + nonIdColumns);
+
+        // Condition "au moins une colonne non-ID a changé"
+        Column diffCond = lit(false);
+        for (String colName : nonIdColumns) {
+            // Comparaison "null-safe" : eqNullSafe(a, b) → true même si les deux sont null
+            Column prevCol = col("prev." + colName);
+            Column currCol = col("curr." + colName);
+
+            Column colDifferent = not(prevCol.eqNullSafe(currCol));
+            diffCond = diffCond.or(colDifferent);
+        }
+
+        Dataset<Row> updated = joined
+                .filter(diffCond)
+                // On ne garde que la version "courante" de la ligne (curr.*)
+                .select(col("curr.*"))
+                .withColumn("op", lit("U"));
+
+        System.out.println("[DailyIntegrationJob] Updated count = " + updated.count());
+        System.out.println("[DailyIntegrationJob] Sample updated rows:");
+        updated.show(5, false);
+
+        // === UNION FINALE I + U + D ========================================
+        Dataset<Row> diff = inserted
+                .unionByName(updated, true)
+                .unionByName(deleted, true)
                 .withColumn("day", lit(day));
 
         System.out.println("[DailyIntegrationJob] Total diff rows = " + diff.count());
-        System.out.println("[DailyIntegrationJob] Sample of diff (I/D):");
+        System.out.println("[DailyIntegrationJob] Sample of diff (I/U/D):");
         diff.show(20, false);
 
         return diff;
     }
+
 
     /**
      * Écriture de la diff dans bal.db/bal_diff,
