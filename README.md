@@ -1,7 +1,8 @@
 ## Commands
 ```bash
 mvn clean package
-spark-submit --class fr.esilv.SparkMain target\Project-1.0-SNAPSHOT.jar daily-integration 2025-01-01 C:/Users/india/Desktop/Cours/SparkBigData/data/dump-2025-01-01.csv
+spark-submit --class fr.esilv.SparkMain target/Project-1.0-SNAPSHOT.jar daily-integration 2025-01-01 C:/Users/india/Desktop/Cours/SparkBigData/data/dump-2025-01-01.csv
+spark-submit --class fr.esilv.SparkMain target/Project-1.0-SNAPSHOT.jar report
 ```
 
 
@@ -17,7 +18,7 @@ spark-submit --class fr.esilv.SparkMain target\Project-1.0-SNAPSHOT.jar daily-in
 
 ✅ Implémenter DailyIntegrationJob (lecture CSV → diff → bal_diff + bal_latest).
 
-❌ Implémenter ReportJob (aggrégats par département).
+✅ Implémenter ReportJob (aggrégats par département).
 
 ❌ Implémenter RecomputeDumpJob (reconstruction à partir de bal_diff).
 

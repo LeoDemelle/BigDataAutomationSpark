@@ -2,6 +2,8 @@ package fr.esilv;
 
 import org.apache.spark.sql.SparkSession;
 import fr.esilv.job.DailyIntegrationJob;
+import fr.esilv.job.ReportJob;
+
 
 public class SparkMain {
 
@@ -38,9 +40,10 @@ public class SparkMain {
 
 
                 case "report":
-                    // TODO: job de reporting
                     System.out.println("Running job: report");
+                    ReportJob.run(spark);
                     break;
+
 
                 case "recompute-dump":
                     // TODO: job de recomposition d'un dump à une date donnée
