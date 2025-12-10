@@ -25,7 +25,7 @@ spark-submit --class fr.esilv.SparkMain target/Project-1.0-SNAPSHOT.jar diff C:/
 
 ✅ Implémenter RecomputeDumpJob (reconstruction à partir de bal_diff).
 
-❌ Implémenter DiffJob (comparaison de deux snapshots parquet).
+✅ Implémenter DiffJob (comparaison de deux snapshots parquet).
 
 ❌ Écrire les 4 scripts .sh qui appellent spark-submit.
 
