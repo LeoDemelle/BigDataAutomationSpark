@@ -11,3 +11,7 @@
 # OS
 .DS_Store
 Thumbs.db
+
+# Temporary data and output
+bal_latest/
+bal.db/
