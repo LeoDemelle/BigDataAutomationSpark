@@ -2,6 +2,11 @@ package fr.esilv.job;
 
 import org.apache.spark.sql.*;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.sql.types.DataTypes; // <--- AJOUT
+
+// pour l'idempotence (accès au filesystem Hadoop)
+import org.apache.hadoop.fs.FileSystem;
+import java.io.IOException;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -39,12 +44,30 @@ public class DailyIntegrationJob {
     private static final String DIFF_TABLE_PATH = BASE_DB_DIR + "/bal_diff";
     private static final String LATEST_SNAPSHOT_PATH = "bal_latest";
 
+// Schéma explicite du CSV courant (exemple jouet : id,name,city)
+    private static final StructType CURRENT_CSV_SCHEMA = new StructType()
+            .add("id", DataTypes.StringType, false)   // clé, non nullable
+            .add("name", DataTypes.StringType, true)
+            .add("city", DataTypes.StringType, true);
+
+
     public static void run(SparkSession spark, String day, String csvPath) {
         System.out.println("===============================================");
         System.out.println("[DailyIntegrationJob] START for day=" + day + ", csvPath=" + csvPath);
         System.out.println("Working directory = " + System.getProperty("user.dir"));
         System.out.println("Spark version     = " + spark.version());
         System.out.println("===============================================");
+
+        // [IDEMPOTENCE] Vérifier si la partition du jour existe déjà
+        if (isDayAlreadyIntegrated(spark, day)) {
+            System.out.println("[DailyIntegrationJob] Day " + day + " already integrated in '"
+                    + DIFF_TABLE_PATH + "'. Skipping integration.");
+            System.out.println("===============================================");
+            System.out.println("[DailyIntegrationJob] END (skipped) for day=" + day);
+            System.out.println("===============================================");
+            return;
+        }
+
 
         // 1) Lecture du CSV du jour
         Dataset<Row> current = readCurrentCsv(spark, csvPath);
@@ -81,7 +104,7 @@ public class DailyIntegrationJob {
 
         Dataset<Row> df = spark.read()
                 .option("header", "true")
-                .option("inferSchema", "true")
+                .schema(CURRENT_CSV_SCHEMA)  // <--- schéma explicite
                 .csv(csvPath);
 
         System.out.println("[DailyIntegrationJob] current CSV schema:");
@@ -90,13 +113,53 @@ public class DailyIntegrationJob {
         System.out.println("[DailyIntegrationJob] first 5 rows of current CSV:");
         df.show(5, false);
 
-        if (!df.columns()[0].equalsIgnoreCase(ID_COLUMN) && !Arrays.asList(df.columns()).contains(ID_COLUMN)) {
+        boolean hasIdCol = Arrays.asList(df.columns()).contains(ID_COLUMN);
+
+        if (!df.columns()[0].equalsIgnoreCase(ID_COLUMN) && !hasIdCol) {
             System.out.println("[DailyIntegrationJob][WARN] Column '" + ID_COLUMN + "' not found in CSV schema.");
             System.out.println("[DailyIntegrationJob][WARN] You must adapt ID_COLUMN to match the real BAL primary key.");
+            // Dans ce cas, on ne peut pas gérer les null IDs / doublons proprement
+            return df;
+        }
+
+        // [ID QUALITY] Gestion des IDs null et des doublons
+        if (hasIdCol) {
+            long beforeCount = df.count();
+
+            // 1) Supprimer les lignes où l'ID est null
+            Dataset<Row> withoutNullId = df.filter(col(ID_COLUMN).isNotNull());
+            long afterNullFilterCount = withoutNullId.count();
+
+            if (afterNullFilterCount < beforeCount) {
+                System.out.println("[DailyIntegrationJob][WARN] Removed "
+                        + (beforeCount - afterNullFilterCount)
+                        + " rows with null ID in column '" + ID_COLUMN + "'.");
+            }
+
+            // 2) Détecter les IDs dupliqués
+            Dataset<Row> duplicates = withoutNullId.groupBy(col(ID_COLUMN))
+                    .count()
+                    .filter(col("count").gt(1));
+
+            long duplicateIdCount = duplicates.count();
+            if (duplicateIdCount > 0) {
+                System.out.println("[DailyIntegrationJob][WARN] Detected " + duplicateIdCount
+                        + " distinct IDs with duplicates on column '" + ID_COLUMN + "'.");
+                System.out.println("[DailyIntegrationJob][WARN] Keeping first occurrence for each ID and dropping others.");
+            }
+
+            // 3) Dédupliquer : garder une seule ligne par ID
+            Dataset<Row> deduped = withoutNullId.dropDuplicates(ID_COLUMN);
+
+            System.out.println("[DailyIntegrationJob] Row count after null/duplicate ID handling = "
+                    + deduped.count());
+
+            df = deduped;
         }
 
         return df;
     }
+
 
     /**
      * Petit record interne pour transporter le snapshot + un flag "exists".
@@ -258,4 +321,23 @@ public class DailyIntegrationJob {
 
         System.out.println("[DailyIntegrationJob] Latest snapshot written successfully.");
     }
+
+    // [IDEMPOTENCE] Vérifie si bal.db/bal_diff/day=<day> existe déjà (HDFS ou FS local)
+    private static boolean isDayAlreadyIntegrated(SparkSession spark, String day) {
+        try {
+            FileSystem fs = FileSystem.get(spark.sparkContext().hadoopConfiguration());
+            // On utilise le Path Hadoop ici (nom complet pour éviter le conflit avec java.nio.file.Path)
+            org.apache.hadoop.fs.Path dayPath =
+                    new org.apache.hadoop.fs.Path(DIFF_TABLE_PATH + "/day=" + day);
+
+            boolean exists = fs.exists(dayPath);
+            System.out.println("[DailyIntegrationJob] isDayAlreadyIntegrated(" + day + ") = " + exists
+                    + " (path=" + dayPath + ")");
+            return exists;
+        } catch (IOException e) {
+            throw new RuntimeException(
+                    "[DailyIntegrationJob] Failed to check if day " + day + " is already integrated", e);
+        }
+    }
+
 }

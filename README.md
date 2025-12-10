@@ -1,8 +1,13 @@
+## Commands
+```bash
+mvn clean package
+spark-submit --class fr.esilv.SparkMain target\Project-1.0-SNAPSHOT.jar daily-integration 2025-01-01 C:/Users/india/Desktop/Cours/SparkBigData/data/dump-2025-01-01.csv
+```
+
+
+
 ## Current todo
-- Make sure not to run the program twice in a single day (idempotence)
-- Manage double ids or null ids
-- Delete all logs
-- Replace inferSchema=True with a defined schema
+
 
 ## Main Steps
 
@@ -21,3 +26,5 @@
 ❌ Écrire les 4 scripts .sh qui appellent spark-submit.
 
 ❌ Tester localement avec quelques petits CSV jouets, puis avec le script de test donné.
+
+❌ Supprimer les logs, sauvegarder les outputs, ...
