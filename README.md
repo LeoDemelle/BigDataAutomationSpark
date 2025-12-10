@@ -3,7 +3,9 @@
 mvn clean package
 spark-submit --class fr.esilv.SparkMain target/Project-1.0-SNAPSHOT.jar daily-integration 2025-01-01 C:/Users/india/Desktop/Cours/SparkBigData/data/dump-2025-01-01.csv
 spark-submit --class fr.esilv.SparkMain target/Project-1.0-SNAPSHOT.jar report
-spark-submit --class fr.esilv.SparkMain target/Project-1.0-SNAPSHOT.jar recompute-dump 2025-01-02 C:/Users/india/Desktop/Cours/SparkBigData/data/recomposed/
+spark-submit --class fr.esilv.SparkMain target/Project-1.0-SNAPSHOT.jar recompute-dump 2025-01-02 C:/Users/india/Desktop/Cours/SparkBigData/data/recomposed/2025-01-02/
+spark-submit --class fr.esilv.SparkMain target/Project-1.0-SNAPSHOT.jar diff C:/Users/india/Desktop/Cours/SparkBigData/data/recomposed/2025-01-02/ C:/Users/india/Desktop/Cours/SparkBigData/data/recomposed/2025-01-03/
+
 ```
 
 
