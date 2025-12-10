@@ -3,6 +3,7 @@ package fr.esilv;
 import org.apache.spark.sql.SparkSession;
 import fr.esilv.job.DailyIntegrationJob;
 import fr.esilv.job.ReportJob;
+import fr.esilv.job.RecomputeDumpJob;
 
 
 public class SparkMain {
@@ -46,9 +47,16 @@ public class SparkMain {
 
 
                 case "recompute-dump":
-                    // TODO: job de recomposition d'un dump à une date donnée
-                    System.out.println("Running job: recompute-dump");
+                    if (args.length < 3) {
+                        System.err.println("Usage: SparkMain recompute-dump <day> <outputDir>");
+                        System.exit(1);
+                    }
+                    String targetDay = args[1];
+                    String outputDir = args[2];
+                    System.out.println("Running job: recompute-dump, day = " + targetDay + ", outputDir = " + outputDir);
+                    RecomputeDumpJob.run(spark, targetDay, outputDir);
                     break;
+
 
                 case "diff":
                     // TODO: job de diff entre deux dumps parquet
