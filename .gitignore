@@ -15,3 +15,6 @@ Thumbs.db
 # Temporary data and output
 bal_latest/
 bal.db/
+
+# Garde les scripts shell en LF
+*.sh text eol=lf
