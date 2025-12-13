@@ -24,7 +24,12 @@ public class SparkMain {
                 .master("local[*]")
                 .getOrCreate();
 
+        // Les deux lignes suivantes sont très importantes pour ne pas sur-consommer la mémoire
+        spark.conf().set("spark.sql.shuffle.partitions", "64");
+        spark.conf().set("spark.default.parallelism", "64");
+
         spark.sparkContext().setLogLevel("ERROR");
+
 
         try {
             switch (job) {

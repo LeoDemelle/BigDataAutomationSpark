@@ -37,7 +37,7 @@ public class DailyIntegrationJob {
 
     // ⚠ À adapter au vrai schéma BAL (id colonne)
     // Pour l'instant on part sur un nom générique "id"
-    private static final String ID_COLUMN = "id";
+    private static final String ID_COLUMN = "uid_adresse";
 
     // Chemins de base (relatifs au répertoire courant)
     private static final String BASE_DB_DIR = "bal.db";
@@ -46,9 +46,25 @@ public class DailyIntegrationJob {
 
 // Schéma explicite du CSV courant (exemple jouet : id,name,city)
     private static final StructType CURRENT_CSV_SCHEMA = new StructType()
-            .add("id", DataTypes.StringType, false)   // clé, non nullable
-            .add("name", DataTypes.StringType, true)
-            .add("city", DataTypes.StringType, true);
+            .add("uid_adresse", DataTypes.StringType, false)   // clé, non nullable
+            .add("cle_interop", DataTypes.StringType, true)
+            .add("commune_insee", DataTypes.IntegerType, true)
+            .add("commune_nom", DataTypes.StringType, true)
+            .add("commune_deleguee_insee", DataTypes.IntegerType, true)
+            .add("commune_deleguee_nom", DataTypes.StringType, true)
+            .add("voie_nom", DataTypes.StringType, true)
+            .add("lieudit_complement_nom", DataTypes.StringType, true)
+            .add("numero", DataTypes.IntegerType, true)
+            .add("suffixe", DataTypes.StringType, true)
+            .add("position", DataTypes.StringType, true)
+            .add("x", DataTypes.DoubleType, true)
+            .add("y", DataTypes.DoubleType, true)
+            .add("long", DataTypes.DoubleType, true)
+            .add("lat", DataTypes.DoubleType, true)
+            .add("cad_parcelles", DataTypes.StringType, true)
+            .add("source", DataTypes.StringType, true)
+            .add("date_der_maj", DataTypes.DateType, true)
+            .add("certification_commune", DataTypes.IntegerType, true);
 
 
     public static void run(SparkSession spark, String day, String csvPath) {
@@ -82,11 +98,16 @@ public class DailyIntegrationJob {
         System.out.println("[DailyIntegrationJob] prev count = " + prev.count());
         System.out.println("[DailyIntegrationJob] current count = " + current.count());
 
-        // 3) Calcul des diff (I / D) – version simple
-        Dataset<Row> diff = computeSimpleDiff(spark, prev, current, day);
+        // 3) Calcul des diff (I / D) – UNIQUEMENT si un snapshot précédent existe
+        if (previousExists) {
+                System.out.println("[DailyIntegrationJob] Previous snapshot found — computing diff (I/U/D).");
+                Dataset<Row> diff = computeSimpleDiff(spark, prev, current, day);
 
-        // 4) Écriture de la diff dans bal.db/bal_diff
-        writeDiff(diff);
+                // 4) Écriture de la diff dans bal.db/bal_diff
+                writeDiff(diff);
+        } else {
+                System.out.println("[DailyIntegrationJob] No previous snapshot found — skipping diff computation and diff write.");
+        }
 
         // 5) Mise à jour du snapshot bal_latest
         writeLatestSnapshot(current);
@@ -104,6 +125,7 @@ public class DailyIntegrationJob {
 
         Dataset<Row> df = spark.read()
                 .option("header", "true")
+                .option("delimiter", ";")
                 .schema(CURRENT_CSV_SCHEMA)  // <--- schéma explicite
                 .csv(csvPath);
 

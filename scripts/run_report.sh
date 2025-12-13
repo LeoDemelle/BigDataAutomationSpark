@@ -7,6 +7,8 @@ MAIN_CLASS="${MAIN_CLASS:-fr.esilv.SparkMain}"
 MASTER_URL="${MASTER_URL:-local[*]}"
 
 spark-submit \
+  --driver-memory 3G \
+  --executor-memory 6G \
   --class "$MAIN_CLASS" \
   --master "$MASTER_URL" \
   "$APP_JAR" \
